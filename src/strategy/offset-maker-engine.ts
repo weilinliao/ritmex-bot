@@ -353,7 +353,8 @@ export class OffsetMakerEngine {
               ? (closeAskPrice != null ? Number(closeAskPrice) : null)
               : (closeBidPrice != null ? Number(closeBidPrice) : null),
           maxPct: this.config.maxCloseSlippagePct,
-        }
+        },
+        { qtyStep: this.qtyStep }
       );
     } catch (error) {
       if (isUnknownOrderError(error)) {
@@ -441,7 +442,8 @@ export class OffsetMakerEngine {
           markPrice: position.markPrice,
           expectedPrice: Number(closeSidePrice) || null,
           maxPct: this.config.maxCloseSlippagePct,
-        }
+        },
+        { qtyStep: this.qtyStep }
       );
     } catch (error) {
       if (isUnknownOrderError(error)) {
@@ -587,7 +589,8 @@ export class OffsetMakerEngine {
             markPrice: position.markPrice,
             expectedPrice: Number(position.positionAmt > 0 ? bidPrice : askPrice) || null,
             maxPct: this.config.maxCloseSlippagePct,
-          }
+          },
+          { qtyStep: this.qtyStep }
         );
       } catch (error) {
         if (isUnknownOrderError(error)) {

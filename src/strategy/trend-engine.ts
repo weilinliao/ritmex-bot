@@ -743,8 +743,8 @@ export class TrendEngine {
                 : this.depthSnapshot?.asks?.[0]?.[0]
             ) || null,
             maxPct: this.config.maxCloseSlippagePct,
-        },
-        { qtyStep: this.config.qtyStep }
+          },
+          { qtyStep: this.config.qtyStep }
         );
         result.closed = true;
         this.tradeLog.push("close", `止损平仓: ${direction === "long" ? "SELL" : "BUY"}`);
@@ -783,7 +783,11 @@ export class TrendEngine {
     }
     try {
       const position = getPosition(this.accountSnapshot, this.config.symbol);
-      const quantity = Math.abs(position.positionAmt) || this.config.tradeAmount;
+      const quantity = Math.abs(position.positionAmt);
+      const minQty = this.config.qtyStep > 0 ? this.config.qtyStep / 2 : 1e-12;
+      if (quantity <= minQty) {
+        return;
+      }
       await placeStopLossOrder(
         this.exchange,
         this.config.symbol,
@@ -839,7 +843,11 @@ export class TrendEngine {
     // 仅在成功创建新止损单后记录“移动止损”日志
     try {
       const position = getPosition(this.accountSnapshot, this.config.symbol);
-      const quantity = Math.abs(position.positionAmt) || this.config.tradeAmount;
+      const quantity = Math.abs(position.positionAmt);
+      const minQty = this.config.qtyStep > 0 ? this.config.qtyStep / 2 : 1e-12;
+      if (quantity <= minQty) {
+        return;
+      }
       const order = await placeStopLossOrder(
         this.exchange,
         this.config.symbol,
@@ -866,7 +874,11 @@ export class TrendEngine {
       // 回滚策略：尝试用原价恢复止损，以避免出现短时间内无止损保护
       try {
         const position = getPosition(this.accountSnapshot, this.config.symbol);
-        const quantity = Math.abs(position.positionAmt) || this.config.tradeAmount;
+        const quantity = Math.abs(position.positionAmt);
+        const minQty = this.config.qtyStep > 0 ? this.config.qtyStep / 2 : 1e-12;
+        if (quantity <= minQty) {
+          return;
+        }
         const restoreInvalid =
           (side === "SELL" && existingStopPrice >= lastPrice) ||
           (side === "BUY" && existingStopPrice <= lastPrice);

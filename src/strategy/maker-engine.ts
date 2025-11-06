@@ -495,7 +495,8 @@ export class MakerEngine {
             markPrice: position.markPrice,
             expectedPrice: Number(closeSidePrice) || null,
             maxPct: this.config.maxCloseSlippagePct,
-          }
+          },
+          { qtyStep: this.qtyStep }
         );
       } catch (error) {
         if (isUnknownOrderError(error)) {
