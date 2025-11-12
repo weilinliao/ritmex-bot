@@ -123,7 +123,6 @@ const WS_STALE_TIMEOUT_MS = 20_000;
 const FEED_STALE_TIMEOUT_MS = 8_000;
 const STALE_CHECK_INTERVAL_MS = 2_000;
 const ACCOUNT_POLL_INTERVAL_MS = 5_000;
-const ACCOUNT_HTTP_EMPTY_CONFIRM_MS = 15_000;
 const POSITION_EPSILON = 1e-12;
 
 const RESOLUTION_MS: Record<string, number> = {
@@ -184,8 +183,8 @@ export class LighterGateway {
   private readonly l1Address: string | null;
   private loggedCreateOrderPayload = false;
   private readonly logTxInfo: boolean;
-  private httpEmptySince: number | null = null;
   private lastWsPositionUpdateAt = 0;
+  private httpPositionsEmptyLogged = false;
 
   private marketId: number | null = null;
   private priceDecimals: number | null = null;
@@ -472,42 +471,20 @@ export class LighterGateway {
     const normalized = this.normalizePositions(details.positions);
     if (normalized.length) {
       this.replacePositions(normalized);
-      this.recordHttpPositionUpdate();
-      this.httpEmptySince = null;
+      this.httpPositionsEmptyLogged = false;
       return;
     }
-    if (!this.isEmptyPositionsPayload(details.positions)) {
-      return;
-    }
-    this.handleHttpEmptyPositions();
-  }
-
-  private handleHttpEmptyPositions(): void {
-    if (this.positions.length === 0) {
-      this.httpEmptySince = null;
-      return;
-    }
-    if (this.httpEmptySince == null) {
-      this.httpEmptySince = Date.now();
-      return;
-    }
-    const now = Date.now();
-    const sinceEmpty = now - this.httpEmptySince;
-    const sinceWs = now - this.lastWsPositionUpdateAt;
-    if (sinceEmpty >= ACCOUNT_HTTP_EMPTY_CONFIRM_MS && sinceWs >= ACCOUNT_HTTP_EMPTY_CONFIRM_MS) {
-      this.positions = [];
-      this.recordHttpPositionUpdate();
-      this.httpEmptySince = null;
+    if (this.isEmptyPositionsPayload(details.positions)) {
+      if (this.positions.length && !this.httpPositionsEmptyLogged) {
+        this.logger("accountPoll", "HTTP positions payload empty, retaining existing positions until WS confirms");
+        this.httpPositionsEmptyLogged = true;
+      }
     }
   }
 
   private recordWsPositionUpdate(): void {
     this.lastWsPositionUpdateAt = Date.now();
-    this.httpEmptySince = null;
-  }
-
-  private recordHttpPositionUpdate(): void {
-    this.httpEmptySince = null;
+    this.httpPositionsEmptyLogged = false;
   }
 
   private async openWebSocket(): Promise<void> {
@@ -760,11 +737,6 @@ export class LighterGateway {
       if (incoming.length) {
         this.mergePositions(incoming);
         this.recordWsPositionUpdate();
-      } else if (this.isEmptyPositionsPayload(positionsObject)) {
-        if (this.positions.length) {
-          this.positions = [];
-        }
-        this.recordWsPositionUpdate();
       }
     }
     this.emitAccount();
@@ -786,16 +758,12 @@ export class LighterGateway {
       this.clearOrdersForMarket(channelMarketId);
       this.emitOrders();
     }
-    if (
-      Object.prototype.hasOwnProperty.call(message, "position") &&
-      !position &&
-      this.isEmptyPositionsPayload(message.position) &&
-      channelMarketId != null &&
-      this.positions.length
-    ) {
-      const target = Number(channelMarketId);
-      this.positions = this.positions.filter((entry) => Number(entry.market_id) !== target);
-      this.recordWsPositionUpdate();
+    if (position && this.shouldRemovePosition(position)) {
+      const target = Number(position.market_id ?? channelMarketId);
+      if (Number.isFinite(target)) {
+        this.positions = this.positions.filter((entry) => Number(entry.market_id) !== target);
+        this.recordWsPositionUpdate();
+      }
     }
     this.emitAccount();
   }
