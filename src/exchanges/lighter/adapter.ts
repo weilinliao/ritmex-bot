@@ -162,8 +162,7 @@ export class LighterExchangeAdapter implements ExchangeAdapter {
       return;
     }
     if (isSuccessfulResponse(error)) {
-      console.info(`[LighterExchangeAdapter] ${context}: ${JSON.stringify(error)}`);
-      return;
+      return; // success responses are noisy; ignore unless non-200
     }
     console.error(`[LighterExchangeAdapter] ${context} failed: ${extractMessage(error)}`);
   }

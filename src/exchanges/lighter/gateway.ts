@@ -174,6 +174,7 @@ export class LighterGateway {
   private readonly auth = { token: null as string | null, expiresAt: 0 };
   private readonly l1Address: string | null;
   private loggedCreateOrderPayload = false;
+  private readonly logTxInfo: boolean;
   private httpEmptySince: number | null = null;
   private lastWsPositionUpdateAt = 0;
 
@@ -243,6 +244,7 @@ export class LighterGateway {
     this.tickerPollMs = options.tickerPollMs ?? DEFAULT_TICKER_POLL_MS;
     this.klinePollMs = options.klinePollMs ?? DEFAULT_KLINE_POLL_MS;
     this.l1Address = options.l1Address ?? null;
+    this.logTxInfo = process.env.LIGHTER_LOG_TX === "1" || process.env.LIGHTER_LOG_TX === "true";
   }
 
   async ensureInitialized(): Promise<void> {
@@ -288,10 +290,9 @@ export class LighterGateway {
         apiKeyIndex,
         nonce,
       });
-      if (!this.loggedCreateOrderPayload) {
-        if (process.env.LIGHTER_DEBUG === "1" || process.env.LIGHTER_DEBUG === "true") {
-          this.logger("createOrder.txInfo", signed.txInfo);
-        }
+      const debugEnabled = process.env.LIGHTER_DEBUG === "1" || process.env.LIGHTER_DEBUG === "true";
+      if (this.logTxInfo && !this.loggedCreateOrderPayload) {
+        this.logger("createOrder.txInfo", signed.txInfo);
         this.loggedCreateOrderPayload = true;
       }
       const auth = await this.ensureAuthToken();
@@ -299,7 +300,7 @@ export class LighterGateway {
         authToken: auth,
         priceProtection: false,
       });
-      if (process.env.LIGHTER_DEBUG === "1" || process.env.LIGHTER_DEBUG === "true") {
+      if (debugEnabled && response.code !== 200) {
         this.logger("createOrder.sendTx.response", response);
       }
       const clientOrderIndexStr = signParams.clientOrderIndex.toString();

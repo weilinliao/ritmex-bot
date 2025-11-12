@@ -546,10 +546,20 @@ export class OffsetMakerEngine {
           this.lastEntryOrderBySide[target.side] = { price: target.price, ts: Date.now() };
         }
       } catch (error) {
-        const dustClosed = await this.tryDustMarketClose(target, error);
-        if (!dustClosed) {
-          this.tradeLog.push("error", `挂单失败(${target.side} ${target.price}): ${String(error)}`);
+        if (isRateLimitError(error)) {
+          throw error;
         }
+        let dustClosed = false;
+        try {
+          dustClosed = await this.tryDustMarketClose(target, error);
+        } catch (dustError) {
+          if (isRateLimitError(dustError)) {
+            throw dustError;
+          }
+          this.tradeLog.push("error", `小额市价平仓失败: ${String(dustError)}`);
+        }
+        if (dustClosed) continue;
+        this.tradeLog.push("error", `挂单失败(${target.side} ${target.price}): ${String(error)}`);
       }
     }
   }
@@ -760,6 +770,9 @@ export class OffsetMakerEngine {
       this.tradeLog.push("order", `小额仓位使用市价平仓 ${target.side} 数量 ${absQty.toFixed(6)}`);
       return true;
     } catch (closeError) {
+      if (isRateLimitError(closeError)) {
+        throw closeError;
+      }
       this.tradeLog.push("error", `小额市价平仓失败: ${String(closeError)}`);
       return false;
     }
