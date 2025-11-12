@@ -120,8 +120,8 @@ const DEFAULT_TICKER_POLL_MS = 3000;
 const DEFAULT_KLINE_POLL_MS = 15000;
 const WS_HEARTBEAT_INTERVAL_MS = 5_000;
 const WS_STALE_TIMEOUT_MS = 20_000;
-const FEED_STALE_TIMEOUT_MS = 30_000;
-const STALE_CHECK_INTERVAL_MS = 5_000;
+const FEED_STALE_TIMEOUT_MS = 8_000;
+const STALE_CHECK_INTERVAL_MS = 2_000;
 const ACCOUNT_POLL_INTERVAL_MS = 5_000;
 const ACCOUNT_HTTP_EMPTY_CONFIRM_MS = 15_000;
 const POSITION_EPSILON = 1e-12;
@@ -535,6 +535,7 @@ export class LighterGateway {
           this.lastMessageAt = Date.now();
           this.startHeartbeat();
           await this.subscribeChannels();
+          this.startStaleMonitor();
           settled = true;
           resolve();
         } catch (error) {
@@ -619,6 +620,10 @@ export class LighterGateway {
   }
 
   private forceReconnect(reason: string): void {
+    const now = Date.now();
+    if (this.staleReason && now - this.lastDepthUpdateAt < FEED_STALE_TIMEOUT_MS / 2) {
+      this.staleReason = null;
+    }
     if (this.staleReason) return;
     this.staleReason = reason;
     this.logger("ws:stale", reason);
@@ -1139,14 +1144,6 @@ export class LighterGateway {
     const now = Date.now();
     if (now - this.lastDepthUpdateAt > FEED_STALE_TIMEOUT_MS) {
       this.forceReconnect("depth stale");
-      return;
-    }
-    if (now - this.lastOrdersUpdateAt > FEED_STALE_TIMEOUT_MS) {
-      this.forceReconnect("orders stale");
-      return;
-    }
-    if (now - this.lastAccountUpdateAt > FEED_STALE_TIMEOUT_MS * 2) {
-      this.forceReconnect("account stale");
     }
   }
 
@@ -1230,7 +1227,9 @@ export class LighterGateway {
       lowPrice: (bestBid ?? last).toString(),
       volume: "0",
       quoteVolume: "0",
-      priceChange: undefined,
+      bidPrice: bestBid != null ? bestBid.toString() : undefined,
+      askPrice: bestAsk != null ? bestAsk.toString() : undefined,
+      priceChange: bestBid != null && bestAsk != null ? (bestAsk - bestBid).toString() : undefined,
       priceChangePercent: undefined,
       weightedAvgPrice: undefined,
       lastQty: undefined,
