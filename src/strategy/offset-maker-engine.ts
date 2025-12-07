@@ -780,6 +780,8 @@ export class OffsetMakerEngine {
       if (!triggerStop) return;
       this.tradeLog.push("stop", `现货止损，当前仓位=${absPosition.toFixed(6)} PnL=${pnl.toFixed(4)} USDT`);
       try {
+        // 尽力撤销所有未完成挂单，避免锁定基础资产导致余额不足
+        await this.exchange.cancelAllOrders({ symbol: this.config.symbol }).catch(() => {});
         await this.flushOrders();
         await marketClose(
           this.exchange,

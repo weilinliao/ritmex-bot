@@ -1756,7 +1756,7 @@ export class LighterGateway {
     return qty;
   }
 
-  private getAvailableAssetAmount(assetId?: number | null, symbol?: string | null): number | null {
+  private getAvailableAssetAmount(assetId?: number | null, symbol?: string | null): { available: number | null; wallet: number | null } {
     if (!this.assets.size) return null;
     const normalizedSymbol = symbol ? symbol.toUpperCase() : null;
     for (const asset of this.assets.values()) {
@@ -1767,19 +1767,30 @@ export class LighterGateway {
       const locked = parseNumber(asset.locked_balance ?? 0);
       if (balance == null) continue;
       const available = locked != null ? balance - locked : balance;
-      return Number.isFinite(available) ? available : null;
+      return {
+        available: Number.isFinite(available) ? available : null,
+        wallet: Number.isFinite(balance) ? balance : null,
+      };
     }
-    return null;
+    return { available: null, wallet: null };
   }
 
   private assertSpotBalance(params: { isAsk: boolean; quantity: number | null | undefined; price: number | null }): void {
     const qty = Number(params.quantity);
     if (!Number.isFinite(qty) || qty <= 0) return;
     if (params.isAsk) {
-      const availableBase = this.getAvailableAssetAmount(this.baseAssetId, this.baseAssetSymbol);
-      if (availableBase != null && availableBase + 1e-9 < qty) {
+      const baseAmounts = this.getAvailableAssetAmount(this.baseAssetId, this.baseAssetSymbol);
+      const availableBase = baseAmounts?.available ?? null;
+      const walletBase = baseAmounts?.wallet ?? null;
+      const effective = Math.max(
+        availableBase != null && Number.isFinite(availableBase) ? availableBase : 0,
+        walletBase != null && Number.isFinite(walletBase) ? walletBase : 0
+      );
+      if (effective + 1e-9 < qty) {
         throw new Error(
-          `Insufficient base asset (${this.baseAssetSymbol ?? "BASE"} available ${availableBase}) for spot sell ${qty}`
+          `Insufficient base asset (${this.baseAssetSymbol ?? "BASE"} available ${availableBase ?? 0}${
+            walletBase != null ? ` wallet ${walletBase}` : ""
+          }) for spot sell ${qty}`
         );
       }
       return;
