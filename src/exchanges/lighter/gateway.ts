@@ -905,13 +905,18 @@ export class LighterGateway {
       candidates = preferred;
     }
 
+    const preferSpot = wantsSpot;
     candidates.sort((a, b) => {
       const aExact = normalizeSymbolForms(a.symbol).includes(desiredSymbol.toUpperCase()) ? 1 : 0;
       const bExact = normalizeSymbolForms(b.symbol).includes(desiredSymbol.toUpperCase()) ? 1 : 0;
       if (aExact !== bExact) return bExact - aExact;
       const aSpot = normalizeMarketType(a.market_type) === "spot" ? 1 : 0;
       const bSpot = normalizeMarketType(b.market_type) === "spot" ? 1 : 0;
-      if (aSpot !== bSpot) return bSpot - aSpot;
+      if (aSpot !== bSpot) {
+        const aScore = preferSpot ? aSpot : 1 - aSpot; // prefer perp when not explicitly spot
+        const bScore = preferSpot ? bSpot : 1 - bSpot;
+        return bScore - aScore;
+      }
       return 0;
     });
 
